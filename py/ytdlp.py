@@ -82,10 +82,10 @@ def download_youtube(url):
     print(f'--options: \n1.download video \n2.download audio \n3.download-playlist')
     yc = input(f'--your command: ')
     if yc == '1':
-       command = [sys.executable, "-m", "yt_dlp", *default_options, "--no-playlist", "-f", "mp4", url]
+       command = [sys.executable, "-m", "yt_dlp", *default_options, "--no-playlist", "-f", "mp4", "--js-runtimes", "deno", url]
     if yc == '2':
        command = [sys.executable, "-m", "yt_dlp", *default_options, "--no-playlist",
-                  "-x", "--audio-format", "mp3", url]
+                  "-x", "--audio-format", "mp3", "--js-runtimes", "deno", url]
     if yc == '3':
        command = [sys.executable, "-m", "yt_dlp", *default_options, "--yes-playlist",
                   "-x", "--audio-format", "mp3", "--max-filesize", "16M", "--js-runtimes", "deno", url]
