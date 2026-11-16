@@ -66,51 +66,28 @@ def spr(cmd):
     spr = spr.stdout
     return spr
 
-import subprocess
-import os
-import platform
+default_options = [
+    "--no-config",
+    "-c",
+    "-i",
+    "--geo-bypass-country", "US",
+    "--restrict-filenames",
+    "-o", "F:/music/%(playlist_title)s/%(playlist_index)s.%(artist)s.%(title)s.%(ext)s",
+    "--ffmpeg-location", f"C:{os.sep}ProgramData{os.sep}chocolatey{os.sep}bin",
+]
 
-default_config = inspect.cleandoc(f"""
--c -i --geo-bypass-country US --restrict-filenames
--o "F:/music/%(playlist_title)s/%(playlist_index)s.%(artist)s.%(title)s.%(ext)s"
---ffmpeg-location "C:{os.sep}ProgramData{os.sep}chocolatey{os.sep}bin"
-""")
-def create_config_file(config_path):
-    """Creates the ytdlp config file with default settings using micro editor."""
-    if not os.path.exists(config_path):
-        print(f"Updating: {config_path}")
-        try:
-            if  platform.system() == "Windows":
-                subprocess.run(["micro", config_path], input=default_config, text=True, check=True)
-            else:
-                # For Linux/macOS, you might need to ensure 'micro' is in PATH
-                subprocess.run(["micro", config_path], input=default_config, text=True, check=True)
-            print(f"Default configuration written to {config_path}. Please edit if needed.")
-        except FileNotFoundError:
-            print("Error: 'micro' editor not found. Please install it or create the config file manually.")
-            with open(config_path, "w") as f:
-                f.write(default_config)
-            print(f"Default configuration written to {config_path}. Please edit it manually.")
-        except subprocess.CalledProcessError as e:
-            print(f"Error creating config file with micro: {e}")
-            print("Falling back to writing default config directly.")
-            with open(config_path, "w") as f:
-                f.write(default_config)
-    else:
-        print(f"Config file already exists at: {config_path}")
-
-def download_youtube(url, config_path):
-    """Downloads a YouTube playlist or single video using ytdlp with the specified config."""
+def download_youtube(url):
+    """Downloads a YouTube playlist or single video using built-in options."""
     print(f'--current url: \033[033m{url}\033[0m')
     print(f'--options: \n1.download video \n2.download audio \n3.download-playlist')
     yc = input(f'--your command: ')
     if yc == '1':
-       command = [sys.executable, "-m", "yt_dlp", "--config-location", config_path, "--no-playlist", "-f", "mp4", url]
+       command = [sys.executable, "-m", "yt_dlp", *default_options, "--no-playlist", "-f", "mp4", url]
     if yc == '2':
-       command = [sys.executable, "-m", "yt_dlp", "--config-location", config_path, "--no-playlist",
+       command = [sys.executable, "-m", "yt_dlp", *default_options, "--no-playlist",
                   "-x", "--audio-format", "mp3", url]
     if yc == '3':
-       command = [sys.executable, "-m", "yt_dlp", "--config-location", config_path, "--yes-playlist",
+       command = [sys.executable, "-m", "yt_dlp", *default_options, "--yes-playlist",
                   "-x", "--audio-format", "mp3", "--max-filesize", "16M", "--js-runtimes", "deno", url]
     print(f"Running command: {' '.join(command)}")
     try:
@@ -120,11 +97,6 @@ def download_youtube(url, config_path):
         print(f"Error during download: {e}")
 
 if  __name__ == "__main__":
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_file = "ytdlp_config.txt"
-    config_path = os.path.join(script_dir, config_file)
-
-    create_config_file(config_path)
     yturl = cbget()
     if  yturl.startswith('http'):
         youtube_url = yturl
@@ -133,6 +105,6 @@ if  __name__ == "__main__":
     else:
         youtube_url = input("Enter YouTube playlist or video URL: ")
     if  youtube_url:
-        download_youtube(youtube_url, config_path)
+        download_youtube(youtube_url)
     else:
         print("No URL provided.")
