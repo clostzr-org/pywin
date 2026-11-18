@@ -40,22 +40,27 @@ except:
 import os
 import re
 
-def batch_rename_files():
+def batch_rename_files(working_dir=None):
     """
-    Batch renames files in the current directory based on user input.
+    Batch renames files in the selected directory based on user input.
     Provides a preview and confirmation before execution.
     """
 
-    # Get working directory
-    working_dir = os.getcwd()  #Use current directory by default
+    if working_dir is None:
+        working_dir = os.getcwd()
+    working_dir = os.path.abspath(working_dir)
     print(f'current workdir: {working_dir}')
-    if r'C:' in working_dir:
-       if r"C:\Users\Admin\OneDrive" in working_dir:
-          print(f'whitelisted: {working_dir}')
-       elif not r"C:\Users\Admin\OneDrive" in working_dir:
-          print(f'blacklisted: {working_dir}')
-          input(f'press Enter')
-          sys.exit()
+    normalized_working_dir = os.path.normcase(working_dir)
+    one_drive_root = os.path.normcase(os.path.abspath(r"C:\Users\Admin\OneDrive"))
+    working_drive, _ = os.path.splitdrive(normalized_working_dir)
+    one_drive_drive, _ = os.path.splitdrive(one_drive_root)
+    if working_drive == one_drive_drive:
+        if os.path.commonpath((normalized_working_dir, one_drive_root)) == one_drive_root:
+            print(f'whitelisted: {working_dir}')
+        else:
+            print(f'blacklisted: {working_dir}')
+            input(f'press Enter')
+            sys.exit()
         
     #List all files in the directory.
     files = [f for f in os.listdir(working_dir) if os.path.isfile(os.path.join(working_dir, f))]
@@ -114,7 +119,26 @@ def batch_rename_files():
 
 
 if __name__ == "__main__":
-    batch_rename_files()
+    if len(sys.argv) == 1:
+        from tkinter import Tk, filedialog
+
+        root = Tk()
+        root.withdraw()
+        try:
+            working_dir = filedialog.askdirectory(
+                parent=root,
+                title="Choose a folder to batch rename",
+                mustexist=True,
+            )
+        finally:
+            root.destroy()
+
+        if working_dir:
+            batch_rename_files(working_dir)
+        else:
+            print("No folder selected.")
+    else:
+        batch_rename_files()
 
 print(f'all done')
 time.sleep(4)
