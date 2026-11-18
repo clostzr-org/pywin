@@ -20,6 +20,65 @@
 
 namespace fs = std::filesystem;
 
+enum class CliColor {
+    reset,
+    red,
+    green,
+    yellow,
+    blue,
+    magenta,
+    cyan,
+    dim
+};
+
+bool cli_colors_enabled = false;
+
+const char *color(CliColor value) {
+    if (!cli_colors_enabled) {
+        return "";
+    }
+
+    switch (value) {
+    case CliColor::red: return "\x1b[31m";
+    case CliColor::green: return "\x1b[32m";
+    case CliColor::yellow: return "\x1b[33m";
+    case CliColor::blue: return "\x1b[34m";
+    case CliColor::magenta: return "\x1b[35m";
+    case CliColor::cyan: return "\x1b[36m";
+    case CliColor::dim: return "\x1b[2m";
+    case CliColor::reset: return "\x1b[0m";
+    }
+    return "";
+}
+
+#ifdef _WIN32
+class ConsoleColors {
+public:
+    ConsoleColors() : output_(GetStdHandle(STD_OUTPUT_HANDLE)) {
+        if (output_ != INVALID_HANDLE_VALUE &&
+            GetConsoleMode(output_, &original_mode_) &&
+            SetConsoleMode(output_, original_mode_ | ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
+            enabled_ = true;
+        }
+    }
+
+    ~ConsoleColors() {
+        if (enabled_) {
+            SetConsoleMode(output_, original_mode_);
+        }
+    }
+
+    bool enabled() const {
+        return enabled_;
+    }
+
+private:
+    HANDLE output_;
+    DWORD original_mode_ = 0;
+    bool enabled_ = false;
+};
+#endif
+
 // Reform a filename: replace spaces, filter characters.
 std::string reform_name(const std::string &filename) {
     std::string result;
@@ -39,8 +98,10 @@ std::string reform_name(const std::string &filename) {
 bool choose_target_path(bool choose_directory, fs::path &target) {
     const HRESULT init_result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(init_result)) {
-        std::cerr << "Could not initialize the Windows file picker (HRESULT 0x"
-                  << std::hex << static_cast<unsigned long>(init_result) << std::dec << ").\n";
+        std::cerr << color(CliColor::red)
+                  << "Could not initialize the Windows file picker (HRESULT 0x"
+                  << std::hex << static_cast<unsigned long>(init_result) << std::dec
+                  << ")." << color(CliColor::reset) << "\n";
         return false;
     }
 
@@ -80,8 +141,9 @@ bool choose_target_path(bool choose_directory, fs::path &target) {
     if (selected) {
         target = fs::path(selected_path);
     } else if (hr != HRESULT_FROM_WIN32(ERROR_CANCELLED)) {
-        std::cerr << "The Windows file picker failed (HRESULT 0x"
-                  << std::hex << static_cast<unsigned long>(hr) << std::dec << ").\n";
+        std::cerr << color(CliColor::red) << "The Windows file picker failed (HRESULT 0x"
+                  << std::hex << static_cast<unsigned long>(hr) << std::dec
+                  << ")." << color(CliColor::reset) << "\n";
     }
 
     if (selected_path) {
@@ -125,7 +187,9 @@ bool is_allowed_target(const fs::path &target) {
 }
 #else
 bool choose_target_path(bool, fs::path &) {
-    std::cerr << "Interactive file selection is only available on Windows.\n";
+    std::cerr << color(CliColor::red)
+              << "Interactive file selection is only available on Windows."
+              << color(CliColor::reset) << "\n";
     return false;
 }
 
@@ -142,12 +206,16 @@ void process_target(const fs::path &target, bool execute) {
         const auto new_base = reform_name(base);
         if (base != new_base) {
             const auto new_path = dir / new_base;
-            std::cout << "[FILE] Old: " << base << " -> New: " << new_base << "\n";
+            std::cout << color(CliColor::cyan) << "[FILE]" << color(CliColor::reset)
+                      << " Old: " << color(CliColor::red) << base << color(CliColor::reset)
+                      << " -> New: " << color(CliColor::green) << new_base
+                      << color(CliColor::reset) << "\n";
             if (execute) {
                 try {
                     fs::rename(target, new_path);
                 } catch (const std::exception &e) {
-                    std::cout << "  [ERROR] Could not rename " << base << ": " << e.what() << "\n";
+                    std::cout << color(CliColor::red) << "  [ERROR] Could not rename "
+                              << base << ": " << e.what() << color(CliColor::reset) << "\n";
                 }
             }
         }
@@ -168,14 +236,17 @@ void process_target(const fs::path &target, bool execute) {
         }
     } catch (const fs::filesystem_error &e) {
         if (e.code() == std::errc::permission_denied) {
-            std::cout << "Permission Denied: " << target << "\n";
+            std::cout << color(CliColor::yellow) << "Permission Denied: "
+                      << target << color(CliColor::reset) << "\n";
         } else {
-            std::cout << "[ERROR] Could not scan " << target << ": " << e.what() << "\n";
+            std::cout << color(CliColor::red) << "[ERROR] Could not scan "
+                      << target << ": " << e.what() << color(CliColor::reset) << "\n";
         }
         return;
     }
 
-    std::cout << "\nScanning directory: " << target << "\n";
+    std::cout << "\n" << color(CliColor::cyan) << "Scanning directory: "
+              << target << color(CliColor::reset) << "\n";
     for (std::size_t i = 0; i < items.size(); ++i) {
         const auto &item_path = items[i];
         const auto item = item_path.filename().string();
@@ -187,26 +258,38 @@ void process_target(const fs::path &target, bool execute) {
 
         if (item == new_base) {
             if (!execute) {
-                std::cout << "  [" << item_index << "] Skipped (Same Name): " << item << "\n";
+                std::cout << color(CliColor::dim) << "  [" << item_index
+                          << "] Skipped (Same Name): " << item
+                          << color(CliColor::reset) << "\n";
             }
             continue;
         }
 
         const auto new_item_path = item_path.parent_path() / new_base;
-        std::cout << "  [" << item_index << "] Old: " << item << "\n"
-                  << "  [" << item_index << "] New: " << new_base << "\n";
+        std::cout << "  [" << item_index << "] Old: " << color(CliColor::red)
+                  << item << color(CliColor::reset) << "\n"
+                  << "  [" << item_index << "] New: " << color(CliColor::green)
+                  << new_base << color(CliColor::reset) << "\n";
         if (execute) {
             try {
                 fs::rename(item_path, new_item_path);
-                std::cout << "  ----> Renamed successfully.\n";
+                std::cout << color(CliColor::green)
+                          << "  ----> Renamed successfully."
+                          << color(CliColor::reset) << "\n";
             } catch (const std::exception &e) {
-                std::cout << "  [ERROR] Could not rename " << item << ": " << e.what() << "\n";
+                std::cout << color(CliColor::red) << "  [ERROR] Could not rename "
+                          << item << ": " << e.what() << color(CliColor::reset) << "\n";
             }
         }
     }
 }
 
 int main(int argc, char *argv[]) {
+#ifdef _WIN32
+    ConsoleColors console_colors;
+    cli_colors_enabled = console_colors.enabled();
+#endif
+
     fs::path target;
     if (argc > 1) {
         target = fs::path(argv[1]);
@@ -214,9 +297,13 @@ int main(int argc, char *argv[]) {
         bool choose_directory = true;
         std::string target_type;
         while (true) {
-            std::cout << "Choose target type: [f]ile or [d]irectory (default d, q to cancel): ";
+            std::cout << color(CliColor::yellow)
+                      << "Choose target type: [f]ile or [d]irectory (default d, q to cancel): "
+                      << color(CliColor::reset);
             if (!std::getline(std::cin, target_type)) {
-                std::cout << "\nNo target selected. Exiting...\n";
+                std::cout << "\n" << color(CliColor::yellow)
+                          << "No target selected. Exiting..."
+                          << color(CliColor::reset) << "\n";
                 return 0;
             }
             for (auto &ch : target_type) {
@@ -234,14 +321,18 @@ int main(int argc, char *argv[]) {
                 break;
             }
             if (target_type == "q" || target_type == "quit" || target_type == "cancel") {
-                std::cout << "No target selected. Exiting...\n";
+                std::cout << color(CliColor::yellow) << "No target selected. Exiting..."
+                          << color(CliColor::reset) << "\n";
                 return 0;
             }
-            std::cout << "Enter f for a file, d for a directory, or q to cancel.\n";
+            std::cout << color(CliColor::yellow)
+                      << "Enter f for a file, d for a directory, or q to cancel."
+                      << color(CliColor::reset) << "\n";
         }
 
         if (!choose_target_path(choose_directory, target)) {
-            std::cout << "No target selected. Exiting...\n";
+            std::cout << color(CliColor::yellow) << "No target selected. Exiting..."
+                      << color(CliColor::reset) << "\n";
             return 0;
         }
     }
@@ -249,26 +340,34 @@ int main(int argc, char *argv[]) {
     std::error_code error;
     target = fs::absolute(target, error).lexically_normal();
     if (error) {
-        std::cout << "Could not resolve path: " << error.message() << "\n";
+        std::cout << color(CliColor::red) << "Could not resolve path: "
+                  << error.message() << color(CliColor::reset) << "\n";
         return 1;
     }
     if (!fs::exists(target, error)) {
         if (error) {
-            std::cout << "Could not access path: " << error.message() << "\n";
+            std::cout << color(CliColor::red) << "Could not access path: "
+                      << error.message() << color(CliColor::reset) << "\n";
         } else {
-            std::cout << "Path does not exist: " << target << "\n";
+            std::cout << color(CliColor::red) << "Path does not exist: "
+                      << target << color(CliColor::reset) << "\n";
         }
         return 1;
     }
     if (!is_allowed_target(target)) {
-        std::cout << "Skipped non-whitelisted C: path: " << target << "\n";
+        std::cout << color(CliColor::red) << "Skipped non-whitelisted C: path: "
+                  << target << color(CliColor::reset) << "\n";
         return 1;
     }
 
-    std::cout << "\n--- DRY RUN: Previewing Changes ---\n";
+    std::cout << "\n" << color(CliColor::magenta)
+              << "--- DRY RUN: Previewing Changes ---"
+              << color(CliColor::reset) << "\n";
     process_target(target, false);
 
-    std::cout << "\nExecute the rename operations? (yes/no): ";
+    std::cout << "\n" << color(CliColor::yellow)
+              << "Execute the rename operations? (yes/no): "
+              << color(CliColor::reset);
     std::string confirm;
     std::getline(std::cin, confirm);
     for (auto &ch : confirm) {
@@ -276,10 +375,14 @@ int main(int argc, char *argv[]) {
     }
 
     if (confirm == "yes" || confirm == "y") {
-        std::cout << "\nExecuting transformations...\n";
+        std::cout << "\n" << color(CliColor::cyan)
+                  << "Executing transformations..."
+                  << color(CliColor::reset) << "\n";
         process_target(target, true);
     } else {
-        std::cout << "\nOperation cancelled. Exiting...\n";
+        std::cout << "\n" << color(CliColor::yellow)
+                  << "Operation cancelled. Exiting..."
+                  << color(CliColor::reset) << "\n";
     }
     return 0;
 }

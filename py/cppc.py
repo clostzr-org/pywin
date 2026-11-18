@@ -55,10 +55,10 @@ def compile_cpp_file(cpp_path, forced_exe_name=None):
     
     if shutil.which("g++"):
         compile_cmd = [
-            "g++", "-Os", "-s",
+            "g++", "-std=c++17", "-Os", "-s",
             "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
             cpp_path, "-o", exe_path,
-            "-luser32", "-lole32", "-lkernel32"
+            "-luser32", "-lole32", "-lkernel32", "-lshell32", "-luuid"
         ]
         res = subprocess.run(compile_cmd, cwd=file_dir,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -68,9 +68,10 @@ def compile_cpp_file(cpp_path, forced_exe_name=None):
             
     elif shutil.which("cl"):
         compile_cmd = [
-            "cl.exe", "/O1", "/MD", "/EHsc",
+            "cl.exe", "/std:c++17", "/O1", "/MD", "/EHsc",
             cpp_path, "/link", "/OPT:REF", "/OPT:ICF",
-            "user32.lib", "ole32.lib", "kernel32.lib", f"/OUT:{exe_path}"
+            "user32.lib", "ole32.lib", "kernel32.lib", "shell32.lib", "uuid.lib",
+            f"/OUT:{exe_path}"
         ]
         res = subprocess.run(compile_cmd, cwd=file_dir,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
